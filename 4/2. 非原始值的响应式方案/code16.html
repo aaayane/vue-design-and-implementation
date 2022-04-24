@@ -1,9 +1,10 @@
 <body></body>
 <script>
-    // 对for of 遍历数组的响应式
+    // includes', 'indexOf', 'lastIndexOf' 方法 响应式
     // 存储副作用函数的桶
     const bucket = new WeakMap();
     const ITERATE_KEY = Symbol('iterate');
+    const reactiveMap = new Map();
 
     const SET = 'SET';
     const ADD = 'ADD';
@@ -12,7 +13,15 @@
     const LENGTH = 'length';
 
     function reactive(obj) {
-        return createReactive(obj);
+        const existionProxy = reactiveMap.get(obj);
+        if (existionProxy) {
+            console.log(existionProxy);
+            return existionProxy;
+        }
+        const proxy = createReactive(obj);
+        reactiveMap.set(obj, proxy);
+        console.log(proxy);
+        return proxy;
     }
     function shallowReactive(obj) {
         return createReactive(obj, true);
@@ -23,6 +32,19 @@
     function shallowReadOnly(obj) {
         return createReactive(obj, true, true);
     }
+
+    const arrayInstrumentations = {};
+    ['includes', 'indexOf', 'lastIndexOf'].forEach(method => {
+        const originMethod = Array.prototype[method];
+        arrayInstrumentations[method] = function (...args) {
+            let res = originMethod.apply(this, args);
+            if (res === false) {
+                res = originMethod.apply(this[RAW], args);
+            }
+            return res;
+        };
+    });
+    
     function createReactive(obj, isShallow = false, isReadonly = false) {
         return new Proxy(obj, {
             // 拦截读取操作
@@ -30,8 +52,12 @@
                 if (key === RAW) {
                     return target;
                 }
+
+                if (Array.isArray(target) && arrayInstrumentations.hasOwnProperty(key)) {
+                    return Reflect.get(arrayInstrumentations, key, receiver);
+                }
                 // 非只读的时候才需要建立响应联系
-                if (!isReadonly) {
+                if (!isReadonly && typeof key !== 'symbol') {
                     // 将副作用函数 activeEffect 添加到存储副作用函数的桶中
                     track(target, key);
                 }
@@ -196,16 +222,11 @@
         }
         effectFn.deps.length = 0;
     }
+
     // =================================================================
 
-    const arr = reactive([1, 2, 3, 4, 5]);
+    const obj = {};
+    const arr = reactive([obj]);
 
-    effect(() => {
-        for (const val of arr.keys()) {
-            console.log(val);
-        }
-    });
-
-    arr[1] = 'bar';
-    arr.length = 0;
+    console.log(arr.includes(obj));
 </script>
