@@ -1,15 +1,8 @@
 <div id="app"></div>
 
-<div data-a="3" mmm="asdf" draggable="true"></div>
-
-<form id="aaa"></form>
-<input value="aaa" form="aaa" />
-
 <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 <script>
-    // 设置props 设置class 删除 class
-    // 卸载组件、更新props、更新class
-
+    // props 绑定事件
     function shouldSetAsProps(el, key, value) {
         if (key === 'form' && el.tagName === 'INPUT') return false;
         return key in el;
@@ -62,10 +55,21 @@
         }
 
         function patch(n1, n2, container) {
-            if (!n1) {
-                mountElement(n2, container);
-            } else {
-                patchElement(n1, n2);
+            if (n1 && n1.type !== n2.type) {
+                unmount(n1);
+                n1 = null;
+            }
+
+            const {type} = n2;
+
+            if (typeof type === 'string') {
+                if (!n1) {
+                    mountElement(n2, container);
+                } else {
+                    patchElement(n1, n2);
+                }
+            } else if (typeof type === 'object') {
+                // 组件
             }
         }
 
@@ -98,8 +102,32 @@
         insert(el, parent, anchor = null) {
             parent.insertBefore(el, anchor);
         },
-        patchProps(el, key, preValue, nextValue) {
-            if (key === 'class') {
+        patchProps(el, key, prevValue, nextValue) {
+            if (/^on/.test(key)) {
+                const invokers = el._vei || (el._vei = {});
+                let invoker = invokers[key];
+                const name = key.slice(2).toLowerCase();
+                if (nextValue) {
+                    if (!invoker) {
+                        invoker = el._vei[key] = e => {
+                            // 新增事件监听器
+                            if (Array.isArray(invoker.value)) {
+                                invoker.value.forEach(fn => fn(e));
+                            } else {
+                                invoker.value(e);
+                            }
+                        };
+                        invoker.value = nextValue;
+                        el.addEventListener(name, invoker);
+                    } else {
+                        // 修改事件监听器
+                        invoker.value = nextValue;
+                    }
+                } else if (invoker) {
+                    // 之前有新节点没有，则删除事件监听
+                    el.removeEventListener(name, invoker);
+                }
+            } else if (key === 'class') {
                 el.className = nextValue || '';
             } else if (shouldSetAsProps(el, key, nextValue)) {
                 const type = typeof el[key];
@@ -117,12 +145,16 @@
     const vnode = {
         type: 'p',
         props: {
-            class: 'foo bar baz'
+            onClick: [
+                () => {
+                    alert('clicked 1');
+                },
+                () => {
+                    alert('clicked 2');
+                }
+            ]
         },
         children: 'text'
     };
     renderer.render(vnode, document.querySelector('#app'));
-    setTimeout(() => {
-        renderer.render(null, document.querySelector('#app'));
-    }, 3000);
 </script>
