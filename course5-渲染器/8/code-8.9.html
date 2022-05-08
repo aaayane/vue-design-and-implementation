@@ -2,8 +2,7 @@
 
 <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 <script>
-    // 处理响应式变化的 绑定 事件冒泡
-    // props 绑定事件
+    // 更新children
     function shouldSetAsProps(el, key, value) {
         if (key === 'form' && el.tagName === 'INPUT') return false;
         return key in el;
@@ -31,6 +30,29 @@
             insert(el, container);
         }
 
+        function patchChildren(n1, n2, container) {
+            if (typeof n2.children === 'string') {
+                if (Array.isArray(n1.children)) {
+                    n1.children.forEach(c => unmount(c));
+                }
+                setElementText(container, n2.children);
+            } else if (Array.isArray(n2.children)) {
+                if (Array.isArray(n1.children)) {
+                    n1.children.forEach(c => unmount(c));
+                    n2.children.forEach(c => patch(null, c, container));
+                } else {
+                    setElementText(container, '');
+                    n2.children.forEach(c => patch(null, c, container));
+                }
+            } else {
+                if (Array.isArray(n1.children)) {
+                    n1.children.forEach(c => unmount(c));
+                } else if (typeof n1.children === 'string') {
+                    setElementText(container, '');
+                }
+            }
+        }
+
         function patchElement(n1, n2) {
             const el = (n2.el = n1.el);
             const oldProps = n1.props;
@@ -46,6 +68,7 @@
                     patchProps(el, key, oldProps[key], null);
                 }
             }
+            patchChildren(n1, n2, el);
         }
 
         function unmount(vnode) {
@@ -147,33 +170,15 @@
         }
     });
 
-    const {effect, ref} = VueReactivity;
+    const oldVnode = {
+        type: 'div',
+        children: 'test'
+    };
+    renderer.render(oldVnode, document.querySelector('#app'));
 
-    const bol = ref(false);
-
-    effect(() => {
-        const vnode = {
-            type: 'div',
-            props: bol.value
-                ? {
-                      onClick: () => {
-                          alert('父元素 clicked');
-                      }
-                  }
-                : {},
-            children: [
-                {
-                    type: 'p',
-                    props: {
-                        onClick: () => {
-                            bol.value = true;
-                            alert('子元素 clicked');
-                        }
-                    },
-                    children: 'text'
-                }
-            ]
-        };
-        renderer.render(vnode, document.querySelector('#app'));
-    });
+    const newVnode = {
+        type: 'div',
+        children: null
+    };
+    renderer.render(newVnode, document.querySelector('#app'));
 </script>
